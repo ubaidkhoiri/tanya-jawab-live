@@ -65,23 +65,27 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.18.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, updateDoc, doc, where } from "https://www.gstatic.com/firebasejs/9.18.0/firebase-firestore.js";
-
-        // GANTI DENGAN KONFIGURASI FIREBASE ANDA
-        const firebaseConfig = {
-                  apiKey: "AIzaSyBquAENbvGBS5ammqtbMP4Mii1i9GRBXkY",
-                  authDomain: "tanyajawab-live.firebaseapp.com",
-                  projectId: "tanyajawab-live",
-                  storageBucket: "tanyajawab-live.firebasestorage.app",
-                  messagingSenderId: "1034252516206",
-                  appId: "1:1034252516206:web:4f2f1b09429e561a0a9f7f",
-                  measurementId: "G-CY44KPML84"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const qCol = collection(db, "questions");
+            // Import the functions you need from the SDKs you need
+            import { initializeApp } from "firebase/app";
+            import { getAnalytics } from "firebase/analytics";
+            // TODO: Add SDKs for Firebase products that you want to use
+            // https://firebase.google.com/docs/web/setup#available-libraries
+            
+            // Your web app's Firebase configuration
+            // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+            const firebaseConfig = {
+              apiKey: "AIzaSyBquAENbvGBS5ammqtbMP4Mii1i9GRBXkY",
+              authDomain: "tanyajawab-live.firebaseapp.com",
+              projectId: "tanyajawab-live",
+              storageBucket: "tanyajawab-live.firebasestorage.app",
+              messagingSenderId: "1034252516206",
+              appId: "1:1034252516206:web:4f2f1b09429e561a0a9f7f",
+              measurementId: "G-CY44KPML84"
+            };
+            
+            // Initialize Firebase
+            const app = initializeApp(firebaseConfig);
+            const analytics = getAnalytics(app);
 
         // --- GLOBAL LOGIC ---
         window.sendQuestion = async () => {
