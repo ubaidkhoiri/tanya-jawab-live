@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Q&A - Barebone</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&display=swap');
+        body { font-family: 'Inter', sans-serif; transition: background 0.5s ease; }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .dynamic-text { font-size: clamp(1.5rem, 8vw, 5rem); line-height: 1.1; }
+    </style>
+</head>
+<body class="bg-white text-black min-h-screen">
+
+    <nav class="p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-50">
+        <h1 class="font-bold tracking-tighter">Q&A_LIVE</h1>
+        <div id="connection-status" class="text-xs px-2 py-1 rounded bg-green-100 text-green-700">ONLINE</div>
+    </nav>
+
+    <main id="app-container" class="p-4 max-w-4xl mx-auto">
+        
+        <section id="view-public" class="space-y-8">
+            <div id="live-display-box" class="p-6 border-4 border-black hidden mb-10">
+                <p class="text-xs uppercase font-bold mb-2">Sedang Dibahas:</p>
+                <div id="current-question-text" class="text-2xl font-bold italic"></div>
+                <div id="current-answer-text" class="mt-4 p-3 bg-gray-100 border-l-4 border-black text-sm italic"></div>
+            </div>
+
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <textarea id="input-q" maxlength="280" class="w-full p-4 border border-gray-300 rounded focus:outline-none focus:border-black" rows="4" placeholder="Ketik pertanyaan anonim Anda..."></textarea>
+                <div class="flex justify-between items-center mt-2">
+                    <span id="char-count" class="text-xs text-gray-500">0/280</span>
+                    <button id="btn-send" onclick="sendQuestion()" class="bg-black text-white px-6 py-2 hover:bg-gray-800 disabled:bg-gray-400 transition">KIRIM</button>
+                </div>
+            </div>
+
+            <div id="archive-section" class="mt-10">
+                <h3 class="font-bold border-b-2 border-black inline-block mb-4">ARSIP JAWABAN</h3>
+                <div id="archive-list" class="space-y-4"></div>
+            </div>
+        </section>
+
+        <section id="view-proyektor" class="hidden fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center p-12 text-center">
+            <div id="proyektor-content" class="dynamic-text font-bold uppercase tracking-tight"></div>
+            <div id="proyektor-answer" class="mt-8 text-3xl italic text-gray-600"></div>
+        </section>
+
+        <div class="fixed bottom-4 right-4">
+            <button onclick="toggleModal(true)" class="bg-gray-200 p-2 text-xs rounded-full hover:bg-black hover:text-white">Admin</button>
+        </div>
+    </main>
+
+    <div id="modal-admin" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center z-[200]">
+        <div class="bg-white p-8 max-w-sm w-full mx-4">
+            <h2 class="font-bold mb-4 text-center">ACCESS CODE</h2>
+            <input type="password" id="passcode-input" class="w-full p-2 border border-black mb-4 outline-none text-center" placeholder="****">
+            <div class="flex gap-2">
+                <button onclick="login()" class="flex-1 bg-black text-white py-2">MASUK</button>
+                <button onclick="toggleModal(false)" class="flex-1 border border-black py-2">BATAL</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.18.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, updateDoc, doc, where } from "https://www.gstatic.com/firebasejs/9.18.0/firebase-firestore.js";
+
+        // GANTI DENGAN KONFIGURASI FIREBASE ANDA
+        const firebaseConfig = {
+            apiKey: "AIzaSy...",
+            authDomain: "proyek-anda.firebaseapp.com",
+            projectId: "proyek-anda",
+            storageBucket: "proyek-anda.appspot.com",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const qCol = collection(db, "questions");
+
+        // --- GLOBAL LOGIC ---
+        window.sendQuestion = async () => {
+            const text = document.getElementById('input-q').value;
+            if(!text) return;
+            
+            await addDoc(qCol, {
+                text,
+                timestamp: serverTimestamp(),
+                status: 'pending',
+                isCurrent: false,
+                isStarred: false,
+                answerText: '',
+                lockedBy: null
+            });
+
+            document.getElementById('input-q').value = '';
+            startCooldown();
+        };
+
+        function startCooldown() {
+            const btn = document.getElementById('btn-send');
+            btn.disabled = true;
+            let timer = 30;
+            const interval = setInterval(() => {
+                btn.innerText = `Tunggu (${timer}s)`;
+                timer--;
+                if(timer < 0) {
+                    clearInterval(interval);
+                    btn.disabled = false;
+                    btn.innerText = 'KIRIM';
+                }
+            }, 1000);
+        }
+
+        // --- REAL-TIME SYNC ---
+        onSnapshot(query(qCol, orderBy("timestamp", "desc")), (snapshot) => {
+            const docs = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+            renderPublic(docs);
+            // Tambahkan logika render dashboard di sini berdasarkan role
+        });
+
+        function renderPublic(data) {
+            const current = data.find(q => q.isCurrent);
+            const liveBox = document.getElementById('live-display-box');
+            if(current) {
+                liveBox.classList.remove('hidden');
+                document.getElementById('current-question-text').innerText = current.text;
+                document.getElementById('current-answer-text').innerText = current.answerText || "Narasumber sedang menyiapkan jawaban...";
+                
+                // Update Proyektor
+                document.getElementById('proyektor-content').innerText = current.text;
+                document.getElementById('proyektor-answer').innerText = current.answerText || "";
+            } else {
+                liveBox.classList.add('hidden');
+            }
+
+            const archiveList = document.getElementById('archive-list');
+            archiveList.innerHTML = data.filter(q => q.answerText && q.status === 'done').map(q => `
+                <div class="p-4 border border-gray-200 rounded">
+                    <p class="font-bold">${q.text}</p>
+                    <p class="text-sm text-gray-600 mt-2">A: ${q.answerText}</p>
+                </div>
+            `).join('');
+        }
+
+        // Koneksi monitoring
+        window.addEventListener('online', () => updateStatus(true));
+        window.addEventListener('offline', () => updateStatus(false));
+        function updateStatus(online) {
+            const el = document.getElementById('connection-status');
+            el.innerText = online ? 'ONLINE' : 'OFFLINE';
+            el.className = online ? 'bg-green-100 text-green-700 text-xs px-2 py-1 rounded' : 'bg-red-100 text-red-700 text-xs px-2 py-1 rounded';
+        }
+        
+        // Expose function ke window agar bisa dipanggil HTML
+        window.login = () => {
+            const pass = document.getElementById('passcode-input').value;
+            if(pass === '313354') alert('Login Admin Utama Berhasil! (Implementasikan dashboard di sini)');
+            else if(pass === 'saring354') alert('Login Moderasi Berhasil!');
+            else if(pass === 'teknisi354') {
+                document.getElementById('view-proyektor').classList.remove('hidden');
+                toggleModal(false);
+            }
+        };
+
+        window.toggleModal = (show) => {
+            document.getElementById('modal-admin').classList.toggle('hidden', !show);
+        };
+    </script>
+</body>
+</html>
